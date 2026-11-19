@@ -12,7 +12,9 @@ The Linux capture device also provides an internal color-bar input.
 The complete receiver, including its drivers, models, testbenches and
 documentation, comes from the RTLNet revision in `receiver.lock.json`.
 IronForge already holds that checkout at `rtl/rtlnet/sources/RTLNet`. For
-standalone use, point the build at a checkout of the same revision. In a
+standalone use, `scripts/resolve-receiver.ps1` acquires the complete pinned
+dependency and prints its path. It reuses the canonical checkout inside
+IronForge. Pass `-RtlNet` to select an existing checkout elsewhere. In a
 Vivado project, source `scripts/sources.tcl` and call
 `ironcapture_add_sources <RTLNet-checkout>`. For other simulators, compile
 its recursive receiver file list from the RTLNet repository root, then add

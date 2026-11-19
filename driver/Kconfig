@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config VIDEO_IRONCAPTURE
+	bool "IronKernel IronCapture camera receiver"
+	depends on VIDEO_DEV=y && MEDIA_CONTROLLER && MEDIA_CAMERA_SUPPORT
+	depends on OF && HAS_DMA
+	select VIDEO_V4L2_SUBDEV_API
+	select V4L2_FWNODE
+	select VIDEOBUF2_DMA_CONTIG
+	help
+	  Built-in V4L2 capture for the IronCapture RAW10 receiver and YUYV
+	  DMA writer, with a firmware-connected sensor or internal pattern.

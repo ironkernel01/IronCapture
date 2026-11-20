@@ -4,19 +4,20 @@
 .markdown-body td,.markdown-body th { padding:4px 7px; }
 .markdown-body img { display:block; max-width:100%; margin:0 auto; }
 .markdown-body .brief-brand img { margin:0; }
+.markdown-body img[src$="architecture.png"] { width:85%; height:auto; }
 </style>
 
 <div class="brief-page">
 
 <div class="brief-brand"><img src="assets/ironkernel_logo.png" alt="IronKernel Embedded"></div>
 
-# IronCapture specification
+# IronCapture Specification
 
 <div class="brief-band">IronCapture converts two-lane CSI-2 camera data into packed YUYV video. Its AXI4 write master captures complete frames in DDR without CPU intervention in the pixel path.</div>
 
-A host can give the capture engine one destination address per frame or connect the streaming receiver directly to FPGA logic. Both interfaces deliver the same two-pixel word. An internal pattern source exercises the downstream path with the sensor idle.
+**Markdown design guide for AI-assisted integration.** Use the repository README with Claude or Codex to trace a CSI-2 frame through the RTL, integrate the capture driver, and verify DMA completion in firmware or Linux.
 
-![IronCapture camera, receiver and memory interfaces](assets/architecture.svg)
+![IronCapture camera, receiver and memory interfaces](assets/architecture.png)
 
 | Interface | Contract |
 |---|---|
@@ -32,6 +33,8 @@ A host can give the capture engine one destination address per frame or connect 
 <div class="brief-page">
 
 ## From the CSI-2 lanes to a pixel pair
+
+A host can give the capture engine one destination address per frame or connect the streaming receiver directly to FPGA logic. Both interfaces deliver the same two-pixel word. An internal pattern source exercises the downstream path with the sensor idle.
 
 The receiver aligns the two lane byte streams, checks CSI-2 packet headers, selects the programmed virtual channel and unpacks RAW10 payloads. A clock-crossing FIFO carries pixels and markers into the processing domain. The image pipeline reconstructs RGB before converting to YUYV.
 

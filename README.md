@@ -1,5 +1,7 @@
 # IronCapture
 
+[Product specification (PDF)](documentation/ironcapture_specification.pdf) · [Markdown](documentation/ironcapture_specification.md)
+
 IronCapture captures a two-lane MIPI CSI-2 camera into DDR. One Vivado module
 reference, `ironcapture_top`, contains the RTLNet receiver, Bayer processing,
 YUV422 conversion, AXI4-Lite configuration and an AXI4 write master. Each

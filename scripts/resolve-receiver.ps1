@@ -2,14 +2,13 @@ param([string]$RtlNet, [switch]$Offline)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot
 $pin = Get-Content -Raw -LiteralPath (Join-Path $root 'rtlnet-common.lock.json') | ConvertFrom-Json
-$shared = Join-Path (Split-Path $root) 'rtlnet/sources/RTLNet'
 if (-not $RtlNet) {
-    if ((Test-Path -LiteralPath $shared) -or
-        (Test-Path -LiteralPath (Join-Path (Split-Path (Split-Path $root)) 'IRONFORGE.md'))) {
-        $RtlNet = $shared
-    } else {
-        $RtlNet = Join-Path $root '.deps/RTLNet'
-    }
+    $parent = Split-Path $root
+    $sibling = Join-Path $parent 'RTLNet'
+    $candidates = @($sibling, (Join-Path $parent 'IronForge/rtl/rtlnet/sources/RTLNet'),
+                    (Join-Path $root '.deps/RTLNet'))
+    $RtlNet = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if (-not $RtlNet) { $RtlNet = $sibling }
 }
 if (-not (Test-Path -LiteralPath $RtlNet)) {
     if ($Offline) { throw 'Pinned RTLNet checkout is unavailable offline.' }

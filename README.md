@@ -9,19 +9,20 @@ The Linux capture device also provides an internal color-bar input.
 
 ## Source and integration
 
-The complete receiver, including its drivers, models, testbenches and
-documentation, comes from the RTLNet revision in `receiver.lock.json`.
-IronForge already holds that checkout at `rtl/rtlnet/sources/RTLNet`. For
-standalone use, `scripts/resolve-receiver.ps1` acquires the complete pinned
-dependency and prints its path. It reuses the canonical checkout inside
-IronForge. Pass `-RtlNet` to select an existing checkout elsewhere. In a
-Vivado project, source `scripts/sources.tcl` and call
-`ironcapture_add_sources <RTLNet-checkout>`. For other simulators, compile
-its recursive receiver file list from the RTLNet repository root, then add
-`hdl/ironcapture_writer.sv`, `hdl/ironcapture_control.sv` and
-`hdl/ironcapture_top.v`. The receiver's original license is in RTLNet's
-`LICENSE.md`. The original bare-metal RTLNet design continues to use its own
-top level and register interface.
+IronCapture owns the CSI-2 RTL, freestanding register driver, models, benches
+and documentation in `ip/rtlnet_csi2_rx/`. Both hardware tops use that receiver.
+
+| Top | Interface and use |
+| --- | --- |
+| `rtlnet_csi2_rx` | AXI4-Lite control and a backpressured AXI4-Stream YUYV output, with frame and line markers. The RTLNet bare-metal demo connects this top to its capture DMA and frame manager. Its register driver is under `ip/rtlnet_csi2_rx/driver/`. |
+| `ironcapture_top` | AXI4-Lite control and an AXI4 memory write master. This top submits frames directly to DDR, exposes the receiver at offset `0x1000`, and supports the freestanding and Linux drivers below. |
+
+Source `scripts/sources.tcl` in Vivado. Call `ironcapture_add_stream_sources <RTLNet-root>`
+for the streaming top or `ironcapture_add_sources <RTLNet-root>` for the memory
+writer. The external input is the RTLNet common primitives under `cores/rtlnet_common/`.
+`scripts/resolve-receiver.ps1` locates these primitives and verifies their
+Git tree against `rtlnet-common.lock.json`. The receiver keeps its original
+license in `ip/rtlnet_csi2_rx/LICENSE.md`.
 
 Set `AXI_DATA_WIDTH` to 32, 64 or 128. Connect S_AXI and M_AXI to
 `axi_clk`, set `CLOCK_HZ` to that clock's frequency, and supply a 200 MHz

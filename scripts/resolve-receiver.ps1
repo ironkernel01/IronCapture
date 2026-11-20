@@ -1,7 +1,7 @@
 param([string]$RtlNet, [switch]$Offline)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot
-$pin = Get-Content -Raw -LiteralPath (Join-Path $root 'receiver.lock.json') | ConvertFrom-Json
+$pin = Get-Content -Raw -LiteralPath (Join-Path $root 'rtlnet-common.lock.json') | ConvertFrom-Json
 $shared = Join-Path (Split-Path $root) 'rtlnet/sources/RTLNet'
 if (-not $RtlNet) {
     if ((Test-Path -LiteralPath $shared) -or
@@ -19,12 +19,12 @@ if (-not (Test-Path -LiteralPath $RtlNet)) {
     & git -C $RtlNet checkout --detach $pin.commit
     if ($LASTEXITCODE) { throw 'Unable to select the receiver revision.' }
 }
-$head = & git -C $RtlNet rev-parse HEAD
-if ($LASTEXITCODE -or $head -ne $pin.commit) { throw 'RTLNet revision differs from receiver.lock.json.' }
+$tree = & git -C $RtlNet rev-parse "HEAD:$($pin.core)"
+if ($LASTEXITCODE -or $tree -ne $pin.tree) { throw 'RTLNet common primitives differ from the IronCapture pin.' }
 $url = & git -C $RtlNet remote get-url origin
 if ($LASTEXITCODE -or ($url -replace '^https://[^/@]+@github\.com/','https://github.com/') -ne $pin.repository) {
-    throw 'RTLNet origin differs from receiver.lock.json.'
+    throw 'RTLNet origin differs from rtlnet-common.lock.json.'
 }
-$changes = & git -C $RtlNet status --porcelain --untracked-files=no -- cores/rtlnet_common $pin.core
-if ($LASTEXITCODE -or $changes) { throw 'The checked-out receiver or its shared primitives have local changes.' }
+$changes = & git -C $RtlNet status --porcelain -- $pin.core
+if ($LASTEXITCODE -or $changes) { throw 'The common primitives have local changes.' }
 (Resolve-Path -LiteralPath $RtlNet).Path

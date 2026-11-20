@@ -48,6 +48,7 @@ struct ic_capture {
 	bool sensor_streaming;
 	u32 input;
 	u32 sequence;
+	u64 completed_frames, completed_bytes, dma_errors;
 	struct v4l2_pix_format format;
 	u32 taps0, taps1, phase;
 	bool tune, bit_reverse;
@@ -105,6 +106,12 @@ static irqreturn_t ic_interrupt(int irq, void *data)
 		buf->vb.vb2_buf.timestamp = ktime_get_ns();
 		buf->vb.sequence = cap->sequence++;
 		buf->vb.field = V4L2_FIELD_NONE;
+		if (status & IC_ERROR) {
+			cap->dma_errors++;
+		} else {
+			cap->completed_frames++;
+			cap->completed_bytes += cap->format.sizeimage;
+		}
 		vb2_buffer_done(&buf->vb.vb2_buf, status & IC_ERROR ?
 				VB2_BUF_STATE_ERROR : VB2_BUF_STATE_DONE);
 		ic_issue(cap);
@@ -136,10 +143,14 @@ static int ic_queue_setup(struct vb2_queue *queue, unsigned int *buffers,
 {
 	struct ic_capture *cap = vb2_get_drv_priv(queue);
 
+	/* The encoder reads complete 16-line macroblock rows. Keep the visible
+	 * V4L2 payload unchanged and reserve the cropped tail in the DMA plane. */
+	unsigned int bytes = cap->format.bytesperline * ALIGN(cap->format.height, 16);
+
 	if (*planes)
-		return *planes == 1 && sizes[0] >= cap->format.sizeimage ? 0 : -EINVAL;
+		return *planes == 1 && sizes[0] >= bytes ? 0 : -EINVAL;
 	*planes = 1;
-	sizes[0] = cap->format.sizeimage;
+	sizes[0] = bytes;
 	return 0;
 }
 
@@ -273,8 +284,25 @@ static void ic_stop_streaming(struct vb2_queue *queue)
 	ic_return_buffers(cap, VB2_BUF_STATE_ERROR);
 }
 
+static int ic_buffer_init(struct vb2_buffer *vb)
+{
+	struct ic_capture *cap = vb2_get_drv_priv(vb->vb2_queue);
+	unsigned int end = cap->format.bytesperline * ALIGN(cap->format.height, 16);
+	unsigned int visible = cap->format.sizeimage;
+	void *data;
+
+	if (end <= visible)
+		return 0;
+	data = vb2_plane_vaddr(vb, 0);
+	if (!data || vb2_plane_size(vb, 0) < end)
+		return -EINVAL;
+	memset32(data + visible, 0x80108010, (end - visible) / sizeof(u32));
+	return 0;
+}
+
 static const struct vb2_ops ic_queue_ops = {
 	.queue_setup = ic_queue_setup,
+	.buf_init = ic_buffer_init,
 	.buf_prepare = ic_buffer_prepare,
 	.buf_queue = ic_buffer_queue,
 	.start_streaming = ic_start_streaming,
@@ -403,6 +431,7 @@ static const struct v4l2_ioctl_ops ic_ioctl_ops = {
 	.vidioc_reqbufs = vb2_ioctl_reqbufs,
 	.vidioc_create_bufs = vb2_ioctl_create_bufs,
 	.vidioc_querybuf = vb2_ioctl_querybuf,
+	.vidioc_expbuf = vb2_ioctl_expbuf,
 	.vidioc_prepare_buf = vb2_ioctl_prepare_buf,
 	.vidioc_qbuf = vb2_ioctl_qbuf,
 	.vidioc_dqbuf = vb2_ioctl_dqbuf,
@@ -600,6 +629,26 @@ static void ic_remove_platform(struct platform_device *pdev)
 	v4l2_device_put(&cap->v4l2);
 }
 
+static ssize_t capture_stats_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct ic_capture *cap = dev_get_drvdata(dev);
+	unsigned long flags;
+	u64 frames, bytes, errors;
+	bool running;
+
+	spin_lock_irqsave(&cap->dma_lock, flags);
+	frames = cap->completed_frames;
+	bytes = cap->completed_bytes;
+	errors = cap->dma_errors;
+	running = cap->running;
+	spin_unlock_irqrestore(&cap->dma_lock, flags);
+	return sysfs_emit(buf, "running %u\nframes %llu\npayload_bytes %llu\ndma_errors %llu\n",
+			  running, frames, bytes, errors);
+}
+static DEVICE_ATTR_RO(capture_stats);
+static struct attribute *ic_attrs[] = { &dev_attr_capture_stats.attr, NULL };
+ATTRIBUTE_GROUPS(ic);
+
 static const struct of_device_id ic_of_match[] = {
 	{ .compatible = "ironkernel,ironcapture-1.0" },
 	{}
@@ -612,6 +661,7 @@ static struct platform_driver ic_platform_driver = {
 	.driver = {
 		.name = "ironcapture",
 		.of_match_table = ic_of_match,
+		.dev_groups = ic_groups,
 	},
 };
 module_platform_driver(ic_platform_driver);

@@ -9,17 +9,22 @@ $VivadoBin = (Resolve-Path -LiteralPath $VivadoBin).Path
 $RtlNet = (Resolve-Path -LiteralPath $RtlNet).Path
 $source = Split-Path -Parent $PSScriptRoot
 
+function Resolve-Source([string]$File) {
+    if ($File.StartsWith('ip/rtlnet_csi2_rx/')) { return Join-Path $source $File }
+    if ($File.StartsWith('cores/rtlnet_common/')) { return Join-Path $RtlNet $File }
+    throw "Unknown capture source $File"
+}
 function Get-RtlNetArguments([string]$File) {
-    foreach ($line in Get-Content -LiteralPath (Join-Path $RtlNet $File)) {
+    foreach ($line in Get-Content -LiteralPath (Resolve-Source $File)) {
         $entry = $line.Trim()
         if (!$entry -or $entry.StartsWith('#')) { continue }
         if ($entry -match '^-f\s+(.+)$') {
             Get-RtlNetArguments $Matches[1]
         } elseif ($entry -match '^\+incdir\+(.+)$') {
             '-i'
-            Join-Path $RtlNet $Matches[1]
+            Resolve-Source $Matches[1]
         } elseif ($entry -match '^\w') {
-            Join-Path $RtlNet $entry
+            Resolve-Source $entry
         } else {
             throw "Unsupported RTLNet source-list entry $entry"
         }
@@ -49,7 +54,7 @@ try {
                             '-log', 'compile-writer.log')
     Test-Snapshot tb_ironcapture_writer writer @('PASS IronCapture AXI32 packing',
         'PASS IronCapture AXI64 packing', 'PASS IronCapture AXI128 packing')
-    $patternSources = @(Get-RtlNetArguments 'cores/rtlnet_csi2_rx/hdl/rtlnet_csi2_rx.f')
+    $patternSources = @(Get-RtlNetArguments 'ip/rtlnet_csi2_rx/hdl/rtlnet_csi2_rx.f')
     $patternSources += $writer, (Join-Path $source 'hdl/ironcapture_control.sv'),
                        (Join-Path $source 'hdl/ironcapture_top.v'),
                        (Join-Path $PSScriptRoot 'tb_ironcapture_pattern.sv')

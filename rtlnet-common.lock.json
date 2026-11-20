@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/ironkernel01/RTLNet.git",
   "commit": "084724bba18ed4732288410776a80b86b75e6876",
-  "core": "cores/rtlnet_csi2_rx",
-  "filelist": "cores/rtlnet_csi2_rx/hdl/rtlnet_csi2_rx.f"
+  "core": "cores/rtlnet_common",
+  "tree": "236204c85e4548b73a318b887dea958c5395193c"
 }

@@ -69,6 +69,13 @@ I²C. The Pcam 5C integration uses the OV5640 driver with RAW10 support.
 An application requests `V4L2_PIX_FMT_YUYV` and dequeues frames. IronVideo
 can scan out a DRM framebuffer in the matching `DRM_FORMAT_YUYV` format.
 
+The capture node accepts an optional six-cell `ironkernel,bayer-profile`
+property. Supply the RAW10 black offset, red/green/blue gains (Q4.8),
+RAW10 highlight threshold and processing flags in that order. Bits 0–2
+enable gamma, green equalization and highlight clamp, respectively. Linux
+loads the profile when the sensor binds and again before each sensor stream.
+The internal pattern bypasses Bayer processing.
+
 ## Register map
 
 Registers are 32-bit little-endian. Use full-word writes.

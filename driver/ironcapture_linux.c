@@ -20,6 +20,19 @@
 #define IC_INPUT_PATTERN 1
 #define IC_FPS 30
 
+/* ironkernel,bayer-profile cells in programming order, enables last. */
+static const struct {
+	u16 offset;
+	u16 maximum;
+} ic_bayer_fields[] = {
+	{0x090, 0x3ff}, /* RAW10 black offset */
+	{0x094, 0xfff}, /* red, green and blue gains in unsigned Q4.8 */
+	{0x098, 0xfff},
+	{0x09c, 0xfff},
+	{0x0ac, 0x3ff}, /* highlight threshold */
+	{0x0a4, 0x007}, /* gamma, green equalization and highlight clamp */
+};
+
 static const struct v4l2_frmsize_discrete ic_sizes[] = {
 	{ 1280, 720 },
 	{ 1920, 1080 },
@@ -52,6 +65,8 @@ struct ic_capture {
 	struct v4l2_pix_format format;
 	u32 taps0, taps1, phase;
 	bool tune, bit_reverse;
+	u32 bayer_profile[ARRAY_SIZE(ic_bayer_fields)];
+	bool has_bayer_profile;
 };
 
 static unsigned int ic_read_reg(void *context, unsigned int offset)
@@ -199,6 +214,18 @@ static void ic_drain(struct ic_capture *cap)
 	spin_unlock_irqrestore(&cap->dma_lock, flags);
 }
 
+static void ic_apply_bayer_profile(struct ic_capture *cap)
+{
+	unsigned int i;
+
+	if (!cap->has_bayer_profile)
+		return;
+
+	for (i = 0; i < ARRAY_SIZE(ic_bayer_fields); i++)
+		ic_write_reg(cap, IC_CSI + ic_bayer_fields[i].offset,
+			     cap->bayer_profile[i]);
+}
+
 static int ic_start_streaming(struct vb2_queue *queue, unsigned int count)
 {
 	struct ic_capture *cap = vb2_get_drv_priv(queue);
@@ -254,6 +281,7 @@ static int ic_start_streaming(struct vb2_queue *queue, unsigned int count)
 		goto fail;
 	}
 	if (!pattern) {
+		ic_apply_bayer_profile(cap);
 		ret = v4l2_subdev_call(cap->sensor, video, s_stream, 1);
 		if (ret)
 			goto fail;
@@ -454,6 +482,7 @@ static int ic_sensor_bound(struct v4l2_async_notifier *notifier,
 	struct ic_capture *cap = container_of(notifier, struct ic_capture, notifier);
 
 	mutex_lock(&cap->lock);
+	ic_apply_bayer_profile(cap);
 	cap->sensor = sensor;
 	mutex_unlock(&cap->lock);
 	return 0;
@@ -554,6 +583,24 @@ static int ic_probe_platform(struct platform_device *pdev)
 		cap->tune = true;
 	}
 	cap->bit_reverse = device_property_read_bool(cap->dev, "ironkernel,rx-bit-reverse");
+	if (device_property_present(cap->dev, "ironkernel,bayer-profile")) {
+		size_t count = ARRAY_SIZE(ic_bayer_fields);
+		unsigned int i;
+
+		if (device_property_count_u32(cap->dev, "ironkernel,bayer-profile") != count ||
+		    device_property_read_u32_array(cap->dev, "ironkernel,bayer-profile",
+						   cap->bayer_profile, count)) {
+			ret = dev_err_probe(cap->dev, -EINVAL, "expected six Bayer profile cells\n");
+			goto free;
+		}
+		for (i = 0; i < count; i++) {
+			if (cap->bayer_profile[i] > ic_bayer_fields[i].maximum) {
+				ret = dev_err_probe(cap->dev, -EINVAL, "invalid Bayer profile cell %u\n", i);
+				goto free;
+			}
+		}
+		cap->has_bayer_profile = true;
+	}
 	ret = dma_set_mask_and_coherent(cap->dev, DMA_BIT_MASK(32));
 	if (ret)
 		goto free;
